@@ -31,9 +31,17 @@ main{padding:28px 0 66px}.hero{display:grid;grid-template-columns:1.5fr 1fr;gap:
 .cal-day:not(.blank):hover{background:#e8f4e8;border-color:#bbd4bc}.cal-day.blank{background:transparent;pointer-events:none}
 .cal-day.is-today{border-color:#82b29c}.cal-day.is-selected{background:#d9efe0;border:2px solid #347d5b}
 .cal-day .daynum{font-size:.91rem;font-weight:800}.cal-day .day-emoji{font-size:1.05rem;line-height:1.2;overflow:hidden;white-space:nowrap;max-width:100%}
-.calendar-items{display:grid;gap:9px}.calendar-entry{display:flex;align-items:center;gap:10px;padding:11px;background:#f5f9f1;border-radius:13px;flex-wrap:wrap}
-.calendar-entry .calendar-emoji{font-size:1.6rem}.calendar-entry .calendar-event-info{flex:1;min-width:100px}.calendar-entry strong{display:block}.calendar-entry small{color:#62776b;font-size:.81rem}.calendar-entry .sleeps{font-size:.8rem;font-weight:850;color:#2a6f4b}
-.calendar-entry button{font-size:.77rem;padding:7px 9px}
+/* Calendar event rows: icon | event text | adult controls. Never run the date and countdown together. */
+.calendar-items{display:grid;gap:10px}
+.calendar-entry{display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;column-gap:12px;row-gap:8px;padding:13px 14px;background:#f5f9f1;border-radius:13px;min-width:0}
+.calendar-entry .calendar-emoji{font-size:1.6rem;width:38px;text-align:center;line-height:1.2}
+.calendar-entry .calendar-event-info{min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:4px;overflow-wrap:anywhere}
+.calendar-entry .calendar-event-info strong{display:block;font-size:.96rem;line-height:1.3}
+.calendar-entry .calendar-event-info small{display:block;color:#62776b;font-size:.82rem;line-height:1.4}
+.calendar-entry .calendar-event-info .sleeps{display:block;font-size:.82rem;font-weight:850;color:#2a6f4b;line-height:1.3}
+.calendar-event-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0}
+.calendar-entry .calendar-event-actions button{font-size:.77rem;padding:8px 10px;white-space:nowrap}
+@media(max-width:520px){.calendar-entry{grid-template-columns:34px minmax(0,1fr);column-gap:10px}.calendar-entry .calendar-emoji{width:34px}.calendar-entry .calendar-event-actions{grid-column:2;justify-content:flex-start;flex-wrap:wrap}}
 .calendar-empty{padding:10px;color:var(--muted);font-size:.9rem}
 .calendar-detail{margin-top:15px;padding-top:12px;border-top:1px solid var(--border)}
 .calendar-form label{display:block;font-weight:750;font-size:.87rem;margin:12px 0 5px}
@@ -147,14 +155,15 @@ function eventVisible(e){if(!profile)return false;if(isAdult())return true;retur
 function occurrences(from,to){const out=[];const startYear=Number(from.slice(0,4));const endYear=Number(to.slice(0,4));for(let y=startYear;y<=endYear;y++)out.push(...ukHolidays(y));
  for(const e of state.events||[]){if(!e||!e.date||!e.type||!e.id)continue;
   if(e.type==='birthday'){const md=e.date.slice(5);for(let y=startYear;y<=endYear;y++){const mdSafe=md==='02-29'&&!((y%4===0&&y%100!==0)||y%400===0)?'02-28':md;out.push({...e,date:`${y}-${mdSafe}`,occurrence:true});}}
-  else if(e.repeat==='weekly'||e.repeat==='fortnightly'){const interval=e.repeat==='weekly'?7:14;let day=isoUTC(e.date);const beginning=isoUTC(from),ending=isoUTC(to);if(day<beginning)day+=Math.max(0,Math.ceil((beginning-day)/(interval*DAY_MS)))*interval*DAY_MS;for(let count=0;day<=ending&&count<650;count++,day+=interval*DAY_MS)out.push({...e,date:isoFromUTC(day),occurrence:true});}
+  else if(e.repeat==='weekly'||e.repeat==='fortnightly'||e.repeat==='fourweekly'){const interval=e.repeat==='weekly'?7:e.repeat==='fortnightly'?14:28;let day=isoUTC(e.date);const beginning=isoUTC(from),ending=isoUTC(to);if(day<beginning)day+=Math.max(0,Math.ceil((beginning-day)/(interval*DAY_MS)))*interval*DAY_MS;for(let count=0;day<=ending&&count<650;count++,day+=interval*DAY_MS)out.push({...e,date:isoFromUTC(day),occurrence:true});}
+  else if(e.repeat==='yearly'){const md=e.date.slice(5),firstYear=Math.max(startYear,Number(e.date.slice(0,4)));for(let y=firstYear;y<=endYear;y++){const leap=y%4===0&&(y%100!==0||y%400===0);const mdSafe=md==='02-29'&&!leap?'02-28':md;out.push({...e,date:`${y}-${mdSafe}`,occurrence:true});}}
   else out.push({...e});
  }
  return out.filter(e=>e.date>=from&&e.date<=to&&eventVisible(e)).sort((a,b)=>a.date.localeCompare(b.date)||a.title.localeCompare(b.title));}
 function allUpcoming(){const today=localISO(new Date());return occurrences(today,dayPlus(today,370));}
 function countdownText(n){return n===0?'Today! 🎉':n===1?'1 sleep to go':`${n} sleeps to go`;}
 function calendarEntry(e,allowManage=false){const row=make('div','calendar-entry');row.append(make('span','calendar-emoji',e.emoji));const meta=make('div','calendar-event-info');meta.append(make('strong','',e.title),make('small','',dateLabel(e.date,true)));const n=sleeps(e.date);if(n>=0)meta.append(make('span','sleeps',countdownText(n)));row.append(meta);
- if(allowManage&&isAdult()&&e.type!=='holiday'){row.append(action('Edit',()=>newCalendarEvent(e),'ghost'),action('Remove',()=>deleteCalendarEvent(e.id),'danger'));}return row;}
+ if(allowManage&&isAdult()&&e.type!=='holiday'){const controls=make('div','calendar-event-actions');controls.append(action('Edit',()=>newCalendarEvent(e),'ghost'),action('Remove',()=>deleteCalendarEvent(e.id),'danger'));row.append(controls);}return row;}
 function renderCalendar(){if(!profile)return;const upcoming=allUpcoming(),chosen=[];const included=new Set();for(const ev of upcoming){if(included.has(ev.title))continue;included.add(ev.title);chosen.push(ev);if(chosen.length===4)break;}const nearestHoliday=upcoming.find(e=>e.type==='holiday');if(nearestHoliday&&!chosen.some(e=>e.type==='holiday')){if(chosen.length===4)chosen.pop();chosen.push(nearestHoliday);chosen.sort((a,b)=>a.date.localeCompare(b.date));}const countdowns=$('countdowns');countdowns.replaceChildren();for(const ev of chosen){const card=make('div','countdown-card');card.append(make('span','calendar-emoji',ev.emoji));const info=make('div');info.append(make('strong','',ev.title),make('div','sleeps',countdownText(sleeps(ev.date))),make('small','',dateLabel(ev.date,true)));card.append(info);countdowns.append(card);}
  if(!chosen.length)countdowns.append(make('div','calendar-empty','No dates coming up yet.'));
  $('newCalendarEvent').classList.toggle('hidden',!isAdult());
@@ -171,7 +180,7 @@ function newCalendarEvent(edit=null){if(!isAdult())return;const item=(edit&&stat
  const contactWith=calendarPicker(panel,'Contact with',[['dad','🧔 Time with Dad'],['mum','👩 Time with Mum']],item?.with||'dad');
  const birthdayFor=calendarPicker(panel,'Whose birthday?',[['dave','🦊 Dave'],['doris','🦋 Doris'],['dad','🧔 Dad'],['mum','👩 Mum']],item?.person||'dave');
  const dateLabelEl=make('label','','Date');const date=make('input');date.type='date';date.required=true;date.value=item?.date||localISO(new Date());date.min='2020-01-01';date.max='2100-12-31';dateLabelEl.append(date);panel.append(dateLabelEl);
- const repeat=calendarPicker(panel,'Repeats',[['once','Just this date'],['weekly','Every week'],['fortnightly','Every 2 weeks']],item?.repeat||'once');
+ const repeat=calendarPicker(panel,'Repeats',[['once','Just this date'],['weekly','Every week'],['fortnightly','Every 2 weeks'],['fourweekly','Every 4 weeks'],['yearly','Every year']],item?.repeat||'once');
  function adjust(){const contact=type.value==='contact';contactWith.parentElement.classList.toggle('hidden',!contact);birthdayFor.parentElement.classList.toggle('hidden',contact);repeat.parentElement.classList.toggle('hidden',!contact);}
  type.addEventListener('change',adjust);adjust();const note=make('p','calendar-note','This demo saves dates in this browser only. Do not add real contact arrangements to a public demo.');panel.append(note);
  const controls=make('div','modal-actions');controls.append(action('Cancel',()=>root.replaceChildren(),'ghost'));const saveButton=action('Save date ✓',()=>{if(!date.value||!/^\d{4}-\d{2}-\d{2}$/.test(date.value))return;const id=item?.id||('date-'+Date.now().toString(36)+Math.random().toString(36).slice(2));const isBirthday=type.value==='birthday';const name= isBirthday?PROFILES[birthdayFor.value].name+'’s birthday':'Time with '+PROFILES[contactWith.value].name;const event={id,type:type.value,date:date.value,title:name,emoji:isBirthday?'🎂':'🏡',child:'both',person:isBirthday?birthdayFor.value:null,with:isBirthday?null:contactWith.value,repeat:isBirthday?'yearly':repeat.value,author:profile};if(item){const index=state.events.findIndex(e=>e.id===item.id);state.events[index]=event;}else state.events.push(event);save();root.replaceChildren();selectedCalendarDay=date.value;calendarMonth=new Date(isoDate(date.value).getFullYear(),isoDate(date.value).getMonth(),1);renderCalendar();},'primary');controls.append(saveButton);panel.append(controls);overlay.append(panel);overlay.addEventListener('click',e=>{if(e.target===overlay)root.replaceChildren();});root.replaceChildren(overlay);type.focus();}
